@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CyberNexus - AI-Driven Cybercriminal Network Intelligence</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <i class="fas fa-network-wired"></i>
+                <span class="brand-text">Cyber<span class="brand-highlight">Nexus</span></span>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="#home" class="nav-link active">Home</a></li>
+                <li><a href="#dashboard" class="nav-link">Dashboard</a></li>
+                <li><a href="#network" class="nav-link">Network Map</a></li>
+                <li><a href="#analysis" class="nav-link">Analysis</a></li>
+                <li><a href="#search" class="nav-link">Search</a></li>
+            </ul>
+            <div class="nav-actions">
+                <button class="btn-icon" id="themeToggle">
+                    <i class="fas fa-moon"></i>
+                </button>
+                <button class="btn-primary">Sign In</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section id="home" class="hero-section">
+        <div class="hero-background">
+            <div class="grid-overlay"></div>
+            <canvas id="particleCanvas"></canvas>
+        </div>
+        <div class="container">
+            <div class="hero-content">
+                <div class="hero-badge">
+                    <i class="fas fa-shield-halved"></i>
+                    <span>AI-Powered Threat Intelligence</span>
+                </div>
+                <h1 class="hero-title">
+                    Map Cybercriminal Networks
+                    <span class="gradient-text">With AI Precision</span>
+                </h1>
+                <p class="hero-description">
+                    Advanced artificial intelligence engine that automatically discovers, analyzes, and visualizes 
+                    complex cybercriminal networks in real-time. Identify threats before they strike.
+                </p>
+                <div class="hero-buttons">
+                    <button class="btn-primary btn-lg" onclick="scrollToSection('network')">
+                        <i class="fas fa-play"></i>
+                        View Live Demo
+                    </button>
+                    <button class="btn-secondary btn-lg" onclick="scrollToSection('dashboard')">
+                        <i class="fas fa-chart-line"></i>
+                        Explore Dashboard
+                    </button>
+                </div>
+                <div class="hero-stats">
+                    <div class="stat-item">
+                        <div class="stat-value" id="threatsDetected">1,247</div>
+                        <div class="stat-label">Threats Detected</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="networksMapping">89</div>
+                        <div class="stat-label">Networks Mapped</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="aiAccuracy">94.7%</div>
+                        <div class="stat-label">AI Accuracy</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Dashboard Section -->
+    <section id="dashboard" class="dashboard-section">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">Threat Intelligence Dashboard</h2>
+                <p class="section-description">Real-time monitoring of global cybercrime activity</p>
+                <div class="dashboard-controls">
+                    <button class="btn-control active" data-timeframe="24h">24H</button>
+                    <button class="btn-control" data-timeframe="7d">7D</button>
+                    <button class="btn-control" data-timeframe="30d">30D</button>
+                    <button class="btn-control" data-timeframe="90d">90D</button>
+                </div>
+            </div>
+
+            <div class="dashboard-grid">
+                <!-- Metric Cards -->
+                <div class="metric-card">
+                    <div class="metric-icon critical">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div class="metric-content">
+                        <div class="metric-label">Critical Threats</div>
+                        <div class="metric-value" id="criticalThreats">23</div>
+                        <div class="metric-change positive">
+                            <i class="fas fa-arrow-down"></i> 12% from yesterday
+                        </div>
+                    </div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-icon high">
+                        <i class="fas fa-virus"></i>
+                    </div>
+                    <div class="metric-content">
+                        <div class="metric-label">Active Malware</div>
+                        <div class="metric-value" id="activeMalware">156</div>
+                        <div class="metric-change negative">
+                            <i class="fas fa-arrow-up"></i> 8% increase
+                        </div>
+                    </div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-icon medium">
+                        <i class="fas fa-network-wired"></i>
+                    </div>
+                    <div class="metric-content">
+                        <div class="metric-label">Network Clusters</div>
+                        <div class="metric-value" id="networkClusters">47</div>
+                        <div class="metric-change neutral">
+                            <i class="fas fa-minus"></i> No change
+                        </div>
+                    </div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-icon info">
+                        <i class="fas fa-globe"></i>
+                    </div>
+                    <div class="metric-content">
+                        <div class="metric-label">Monitored IPs</div>
+                        <div class="metric-value" id="monitoredIPs">8,429</div>
+                        <div class="metric-change positive">
+                            <i class="fas fa-arrow-up"></i> 156 new
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Row -->
+            <div class="charts-row">
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3>Threat Activity Timeline</h3>
+                        <div class="chart-legend">
+                            <span class="legend-item"><span class="legend-dot critical"></span>Critical</span>
+                            <span class="legend-item"><span class="legend-dot high"></span>High</span>
+                            <span class="legend-item"><span class="legend-dot medium"></span>Medium</span>
+                        </div>
+                    </div>
+                    <div class="chart-container" style="height: 300px;">
+                        <canvas id="threatTimelineChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3>Threat Distribution</h3>
+                    </div>
+                    <div class="chart-container" style="height: 300px;">
+                        <canvas id="threatDistributionChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Threats Table -->
+            <div class="threat-table-card">
+                <div class="table-header">
+                    <h3>Recent Threat Detections</h3>
+                    <button class="btn-secondary" onclick="exportThreats()">
+                        <i class="fas fa-download"></i> Export
+                    </button>
+                </div>
+                <div class="table-container">
+                    <table class="threat-table" id="recentThreatsTable">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Threat Type</th>
+                                <th>Entity</th>
+                                <th>Severity</th>
+                                <th>Confidence</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="threatTableBody">
+                            <!-- Populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Network Map Section -->
+    <section id="network" class="network-section">
+        <div class="container-fluid">
+            <div class="section-header">
+                <h2 class="section-title">Interactive Network Map</h2>
+                <p class="section-description">AI-detected relationships between threat actors, infrastructure, and malware</p>
+            </div>
+
+            <div class="network-controls">
+                <div class="control-group">
+                    <label>Filter by Type:</label>
+                    <div class="filter-buttons">
+                        <button class="filter-btn active" data-type="all">All</button>
+                        <button class="filter-btn" data-type="threat-actor">Threat Actors</button>
+                        <button class="filter-btn" data-type="malware">Malware</button>
+                        <button class="filter-btn" data-type="ip">IP Addresses</button>
+                        <button class="filter-btn" data-type="domain">Domains</button>
+                        <button class="filter-btn" data-type="crypto">Crypto Wallets</button>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label>Threat Level:</label>
+                    <div class="filter-buttons">
+                        <button class="filter-btn active" data-level="all">All</button>
+                        <button class="filter-btn" data-level="critical">Critical</button>
+                        <button class="filter-btn" data-level="high">High</button>
+                        <button class="filter-btn" data-level="medium">Medium</button>
+                        <button class="filter-btn" data-level="low">Low</button>
+                    </div>
+                </div>
+                <div class="control-actions">
+                    <button class="btn-icon" id="zoomIn" title="Zoom In">
+                        <i class="fas fa-magnifying-glass-plus"></i>
+                    </button>
+                    <button class="btn-icon" id="zoomOut" title="Zoom Out">
+                        <i class="fas fa-magnifying-glass-minus"></i>
+                    </button>
+                    <button class="btn-icon" id="resetView" title="Reset View">
+                        <i class="fas fa-arrows-rotate"></i>
+                    </button>
+                    <button class="btn-secondary" id="exportNetwork">
+                        <i class="fas fa-download"></i> Export Map
+                    </button>
+                </div>
+            </div>
+
+            <div class="network-visualization">
+                <div id="networkGraph" class="graph-container"></div>
+                <div class="network-legend">
+                    <h4>Entity Types</h4>
+                    <div class="legend-items">
+                        <div class="legend-item"><span class="node-icon threat-actor"></span>Threat Actor</div>
+                        <div class="legend-item"><span class="node-icon malware"></span>Malware</div>
+                        <div class="legend-item"><span class="node-icon ip"></span>IP Address</div>
+                        <div class="legend-item"><span class="node-icon domain"></span>Domain</div>
+                        <div class="legend-item"><span class="node-icon crypto"></span>Crypto Wallet</div>
+                    </div>
+                </div>
+                <div class="network-stats">
+                    <div class="stat-mini">
+                        <strong id="nodeCount">0</strong> Nodes
+                    </div>
+                    <div class="stat-mini">
+                        <strong id="edgeCount">0</strong> Connections
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Analysis Section -->
+    <section id="analysis" class="analysis-section">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">AI Threat Analysis</h2>
+                <p class="section-description">Machine learning powered pattern detection and attribution</p>
+            </div>
+
+            <div class="analysis-grid">
+                <div class="analysis-card">
+                    <div class="card-icon">
+                        <i class="fas fa-brain"></i>
+                    </div>
+                    <h3>Pattern Recognition</h3>
+                    <p>AI identifies recurring attack patterns and shared infrastructure across cybercriminal networks</p>
+                    <div class="analysis-results">
+                        <div class="result-item">
+                            <span class="result-label">Patterns Detected:</span>
+                            <span class="result-value">67</span>
+                        </div>
+                        <div class="result-item">
+                            <span class="result-label">Avg. Confidence:</span>
+                            <span class="result-value">89.3%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="analysis-card">
+                    <div class="card-icon">
+                        <i class="fas fa-user-secret"></i>
+                    </div>
+                    <h3>Threat Attribution</h3>
+                    <p>Automatically link attacks to known threat actor groups based on behavioral analysis</p>
+                    <div class="analysis-results">
+                        <div class="result-item">
+                            <span class="result-label">Groups Identified:</span>
+                            <span class="result-value">23</span>
+                        </div>
+                        <div class="result-item">
+                            <span class="result-label">High Confidence:</span>
+                            <span class="result-value">18</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="analysis-card">
+                    <div class="card-icon">
+                        <i class="fas fa-chart-network"></i>
+                    </div>
+                    <h3>Network Clustering</h3>
+                    <p>Discover hidden connections and criminal network structures using graph algorithms</p>
+                    <div class="analysis-results">
+                        <div class="result-item">
+                            <span class="result-label">Clusters Found:</span>
+                            <span class="result-value">47</span>
+                        </div>
+                        <div class="result-item">
+                            <span class="result-label">Avg. Size:</span>
+                            <span class="result-value">12 nodes</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="analysis-card">
+                    <div class="card-icon">
+                        <i class="fas fa-clock-rotate-left"></i>
+                    </div>
+                    <h3>Predictive Intelligence</h3>
+                    <p>Forecast potential attack vectors and emerging threats based on historical data</p>
+                    <div class="analysis-results">
+                        <div class="result-item">
+                            <span class="result-label">Predictions:</span>
+                            <span class="result-value">34</span>
+                        </div>
+                        <div class="result-item">
+                            <span class="result-label">Accuracy Rate:</span>
+                            <span class="result-value">91.2%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Findings -->
+            <div class="findings-card">
+                <h3>Recent AI Findings</h3>
+                <div class="findings-list" id="findingsList">
+                    <!-- Populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Search Section -->
+    <section id="search" class="search-section">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">Intelligence Search</h2>
+                <p class="section-description">Query entities and discover relationships in the threat landscape</p>
+            </div>
+
+            <div class="search-container">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="searchInput" placeholder="Search for IPs, domains, threat actors, malware..." autocomplete="off">
+                    <button class="btn-primary" id="searchBtn">Search</button>
+                </div>
+                <div class="search-suggestions" id="searchSuggestions"></div>
+            </div>
+
+            <div class="search-filters">
+                <button class="chip active" data-search-type="all">All</button>
+                <button class="chip" data-search-type="threat-actor">Threat Actors</button>
+                <button class="chip" data-search-type="malware">Malware</button>
+                <button class="chip" data-search-type="ip">IP Addresses</button>
+                <button class="chip" data-search-type="domain">Domains</button>
+                <button class="chip" data-search-type="crypto">Crypto Wallets</button>
+            </div>
+
+            <div class="search-results" id="searchResults">
+                <!-- Populated by JavaScript -->
+            </div>
+        </div>
+    </section>
+
+    <!-- Entity Detail Modal -->
+    <div class="modal" id="entityModal">
+        <div class="modal-overlay" onclick="closeModal()"></div>
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeModal()">
+                <i class="fas fa-times"></i>
+            </button>
+            <div id="entityDetails">
+                <!-- Populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <p>Processing threat intelligence...</p>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/data.js"></script>
+    <script src="js/network.js"></script>
+    <script src="js/dashboard.js"></script>
+    <script src="js/search.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
