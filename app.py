@@ -1,21 +1,22 @@
 import os
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 import requests
 import random
 import datetime
 
-app = Flask(__name__)
+# --- CONFIGURATION FOR STATIC FILES ---
+# static_url_path='' -> Allows serving files like /style.css directly
+# static_folder='.'  -> Looks for files in the current folder (root)
+app = Flask(__name__, static_url_path='', static_folder='.')
 CORS(app)
 
-# --- 1. CONFIGURATION ---
-# Get API Key from Render Environment Variable
+# Get API Key from Render Environment Variables
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
-SITE_URL = "https://cybernexus.onrender.com" # We will get this URL from Render later
+SITE_URL = "https://cybernexus.onrender.com"
 SITE_NAME = "CyberNexus"
 
-# --- 2. THREAT DATA LOGIC ---
-# (Keep your existing KNOWN_THREATS, DEFAULT_ACTORS, etc. here)
+# --- DATA LISTS (Your Intelligence Data) ---
 KNOWN_THREATS = {
     "CVE-2023": {"actor": "Lazarus Group", "malware": "Manuscrypt", "ioc": "172.16.88.20"},
     "CVE-2024": {"actor": "Volt Typhoon", "malware": "Living-off-the-Land", "ioc": "kv-botnet.net"},
@@ -60,13 +61,15 @@ def enrich_intelligence(item):
         "mitre": "T" + str(random.randint(1000, 1599))
     }
 
-# --- 3. ROUTES ---
+# --- ROUTES ---
 
+# 1. SERVE THE DASHBOARD (The Fix!)
 @app.route('/')
 def home():
-    # Render needs a home route to know the app is running
-    return "CyberNexus Backend Online"
+    # This sends your index.html file to the browser
+    return send_from_directory('.', 'index.html')
 
+# 2. Threat Data API
 @app.route('/api/threats', methods=['GET'])
 def get_threats():
     try:
@@ -122,7 +125,7 @@ def get_threats():
         print(f"Error: {e}")
         return jsonify([])
 
-# --- NEW: AI PROXY ROUTE (Replaces proxy.js) ---
+# 3. AI Proxy Route
 @app.route('/api/proxy', methods=['POST'])
 def ai_proxy():
     if not OPENROUTER_API_KEY:
@@ -130,8 +133,6 @@ def ai_proxy():
 
     try:
         incoming_data = request.json
-        
-        # Forward request to OpenRouter
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={
@@ -145,13 +146,11 @@ def ai_proxy():
                 "messages": incoming_data.get("messages")
             }
         )
-        
         return jsonify(response.json())
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    # Use standard port 5000 for local, Render sets PORT env var
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
