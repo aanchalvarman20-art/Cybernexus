@@ -1,178 +1,164 @@
 // ============================================
-// DASHBOARD - Charts and Real-time Statistics
+// DASHBOARD - PROFESSIONAL METRICS & AUTO-BLOCK
 // ============================================
 
+import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, doc, updateDoc, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getAuth } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+// --- CONFIGURATION ---
+const firebaseConfig = {
+    apiKey: "AIzaSyC6J1itovI6L8IdGrxVOYmUAK9jTkuWDaI",
+    authDomain: "cybernexus-2da05.firebaseapp.com",
+    projectId: "cybernexus-2da05",
+    storageBucket: "cybernexus-2da05.firebasestorage.app",
+    messagingSenderId: "382374361008",
+    appId: "1:382374361008:web:c37a321287c3f70a7d8875",
+    measurementId: "G-7BK5RX5WXY"
+};
+
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+// --- GLOBAL STATE ---
+let updateInterval;
 let threatTimelineChart;
 let threatDistributionChart;
-let updateInterval;
+const autoBlockedIDs = new Set(); 
+window.currentThreatData = []; 
+let timeStep = 0; 
 
-// Initialize dashboard
+// --- EXPOSE FUNCTIONS ---
+window.exportThreats = exportThreats;
+window.addToBlocklist = handleBlockToggle;
+
+// ============================================
+// 1. INITIALIZATION & DATA FETCHING
+// ============================================
+
 function initializeDashboard() {
+    console.log("🚀 CyberNexus Dashboard Online");
     setupCharts();
-    populateThreatTable();
-    updateMetrics();
-    setupDashboardControls();
-    startRealTimeUpdates();
+    setupDashboardControls(); 
+    fetchRealThreats(10); 
+    if (updateInterval) clearInterval(updateInterval);
+    updateInterval = setInterval(() => fetchRealThreats(1), 5000); 
 }
 
-// Setup Chart.js charts
-function setupCharts() {
-    // Threat Timeline Chart
-    const timelineCtx = document.getElementById('threatTimelineChart');
-    if (timelineCtx) {
-        threatTimelineChart = new Chart(timelineCtx, {
-            type: 'line',
-            data: window.threatData.threatTimeline,
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'top',
-                        labels: {
-                            color: '#a0aec0',
-                            font: {
-                                size: 12,
-                                family: 'Inter'
-                            },
-                            padding: 15,
-                            usePointStyle: true
-                        }
-                    },
-                    tooltip: {
-                        backgroundColor: 'rgba(26, 31, 53, 0.95)',
-                        titleColor: '#ffffff',
-                        bodyColor: '#a0aec0',
-                        borderColor: 'rgba(0, 217, 255, 0.5)',
-                        borderWidth: 1,
-                        padding: 12,
-                        displayColors: true,
-                        callbacks: {
-                            label: function(context) {
-                                return `${context.dataset.label}: ${context.parsed.y} threats`;
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        grid: {
-                            color: 'rgba(0, 217, 255, 0.05)',
-                            drawBorder: false
-                        },
-                        ticks: {
-                            color: '#a0aec0',
-                            font: {
-                                size: 11
-                            }
-                        }
-                    },
-                    y: {
-                        grid: {
-                            color: 'rgba(0, 217, 255, 0.05)',
-                            drawBorder: false
-                        },
-                        ticks: {
-                            color: '#a0aec0',
-                            font: {
-                                size: 11
-                            }
-                        },
-                        beginAtZero: true
-                    }
-                },
-                interaction: {
-                    intersect: false,
-                    mode: 'index'
+async function fetchRealThreats(count = 1) {
+    try {
+        const response = await fetch(`http://127.0.0.1:5000/api/threats?count=${count}`);
+        if (!response.ok) throw new Error("Backend Offline");
+        
+        let newThreats = await response.json();
+        
+        if (!Array.isArray(newThreats)) {
+            console.error("Invalid data format:", newThreats);
+            return;
+        }
+        
+        if (newThreats.length > 0) {
+            // --- AUTO-DEFENSE LOGIC START ---
+            newThreats.forEach(t => {
+                const nist = parseFloat(t.nist_score) || 0;
+                const severity = t.severity.toLowerCase();
+                const isAnomaly = t.type === 'anomaly';
+
+                // 1. SOS TRIGGER for Unidentified Threats
+                if (isAnomaly) {
+                    console.warn("SOS CONDITION MET:", t.entity);
+                    if(window.triggerSOS) window.triggerSOS();
+                    if(window.showNotification) window.showNotification("SOS: UNIDENTIFIED SIGNATURE DETECTED!", "error");
                 }
-            }
-        });
-    }
-    
-    // Threat Distribution Chart
-    const distributionCtx = document.getElementById('threatDistributionChart');
-    if (distributionCtx) {
-        threatDistributionChart = new Chart(distributionCtx, {
-            type: 'doughnut',
-            data: window.threatData.threatDistribution,
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'right',
-                        labels: {
-                            color: '#a0aec0',
-                            font: {
-                                size: 12,
-                                family: 'Inter'
-                            },
-                            padding: 15,
-                            usePointStyle: true
-                        }
-                    },
-                    tooltip: {
-                        backgroundColor: 'rgba(26, 31, 53, 0.95)',
-                        titleColor: '#ffffff',
-                        bodyColor: '#a0aec0',
-                        borderColor: 'rgba(0, 217, 255, 0.5)',
-                        borderWidth: 1,
-                        padding: 12,
-                        callbacks: {
-                            label: function(context) {
-                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                const percentage = ((context.parsed / total) * 100).toFixed(1);
-                                return `${context.label}: ${context.parsed} (${percentage}%)`;
-                            }
-                        }
+                
+                // 2. AUTO-BLOCKING (Critical OR Anomaly)
+                if ((nist >= 9.0 || severity === 'critical' || isAnomaly) && !autoBlockedIDs.has(t.entityId)) {
+                    autoBlockedIDs.add(t.entityId);
+                    
+                    let msg = `Auto-Blocked High Risk Threat: ${t.entity}`;
+                    // Special message for anomalies
+                    if (isAnomaly) msg = `⛔ ISOLATION PROTOCOL: Blocked Unidentified Signal ${t.entityId}`;
+
+                    if(window.showNotification) {
+                        window.showNotification(msg, 'error');
                     }
                 }
-            }
-        });
+            });
+            // --- AUTO-DEFENSE LOGIC END ---
+
+            window.currentThreatData.unshift(...newThreats);
+            if (window.currentThreatData.length > 10) window.currentThreatData = window.currentThreatData.slice(0, 10);
+            
+            // UI Updates
+            renderThreatTable(window.currentThreatData); 
+            updateMetrics(window.currentThreatData); 
+            updateChartsWithRealData(window.currentThreatData);
+            
+            if(window.updateNetworkMap) window.updateNetworkMap(newThreats);
+            updateAIStats(window.currentThreatData);
+        }
+    } catch (error) {
+        console.error("Connection Error:", error);
     }
 }
 
-// Populate threat table
-function populateThreatTable() {
+// ============================================
+// 2. RENDERING TABLES WITH BLOCK LOGIC
+// ============================================
+
+function renderThreatTable(threats) {
     const tbody = document.getElementById('threatTableBody');
     if (!tbody) return;
-    
-    tbody.innerHTML = '';
-    
-    window.threatData.recentThreats.forEach(threat => {
+    tbody.innerHTML = ''; 
+
+    threats.forEach(threat => {
+        const isAuto = autoBlockedIDs.has(threat.entityId);
+        const isUser = window.currentUserBlocklist?.includes(threat.entityId);
+        const isBlocked = isAuto || isUser;
+        const isAnomaly = threat.type === 'anomaly';
+
         const row = document.createElement('tr');
+        if (isBlocked) row.style.background = "rgba(255, 77, 109, 0.08)";
+        if (isAnomaly) row.style.background = "rgba(255, 0, 0, 0.15)"; // Darker red for anomaly
+
+        let btnHTML = '';
+        if (isAuto) {
+            btnHTML = `<button class="block-btn" style="border-color: #ff9d00; color: #ff9d00; cursor: not-allowed; opacity: 0.8;"><i class="fas fa-robot"></i> Auto-Blocked</button>`;
+        } else if (isUser) {
+            btnHTML = `<button class="block-btn" style="background: rgba(255, 77, 109, 0.2); border-color: #ff4d6d; color: #ff4d6d;" onclick="addToBlocklist('${threat.entityId}')"><i class="fas fa-check"></i> Blocked</button>`;
+        } else {
+            btnHTML = `<button class="block-btn" onclick="addToBlocklist('${threat.entityId}')"><i class="fas fa-ban"></i> Block</button>`;
+        }
+
         row.innerHTML = `
-            <td style="color: #a0aec0; font-size: 0.9rem;">
-                ${threat.timestamp}
-            </td>
+            <td style="color: #a0aec0; font-size: 0.9rem;">${new Date(threat.timestamp).toLocaleTimeString()}</td>
             <td>
-                <span style="color: #ffffff; font-weight: 600;">${threat.type}</span>
-            </td>
-            <td>
-                <span style="font-family: 'Fira Code', monospace; color: #00d9ff; cursor: pointer;" 
-                      onclick="showEntityDetails('${threat.entityId}')">
-                    ${threat.entity}
+                <span style="color: ${isAnomaly ? '#ff4d6d' : '#fff'}; font-weight: 600;">
+                    ${isAnomaly ? '<i class="fas fa-biohazard"></i> ' : ''}${threat.type.toUpperCase()}
                 </span>
+                <div style="font-size: 0.7rem; color: #a0aec0;">${threat.mitre_id}</div>
             </td>
-            <td>
-                <span class="severity-badge ${threat.severity}">${threat.severity}</span>
-            </td>
-            <td>
-                <div class="confidence-bar">
-                    <div class="confidence-fill" style="width: ${threat.confidence}%"></div>
+            <td style="max-width: 200px;">
+                <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #00d9ff; cursor: pointer;"
+                    onclick="window.showEntityDetails('${threat.entityId}')">
+                    ${threat.entity}
                 </div>
-                <span style="font-size: 0.85rem; color: #a0aec0; margin-left: 8px;">${threat.confidence}%</span>
+                <div style="font-size:0.7rem; color: #718096;">${threat.vendor}</div>
+            </td>
+            <td>
+                <span class="severity-badge ${threat.severity}">${threat.severity.toUpperCase()}</span>
+                <div style="font-size: 0.75rem; margin-top: 4px; font-weight: bold; color: ${getSeverityColor(threat.severity)}">
+                    NIST: ${threat.nist_score}
+                </div>
+            </td>
+            <td>
+                <div class="confidence-bar"><div class="confidence-fill" style="width: ${threat.confidence}%"></div></div>
             </td>
             <td>
                 <div class="action-btns">
-                    <button onclick="showEntityDetails('${threat.entityId}')">
-                        <i class="fas fa-eye"></i> View
-                    </button>
-                    <button onclick="addToBlocklist('${threat.entityId}')">
-                        <i class="fas fa-ban"></i> Block
-                    </button>
+                    <button class="btn-secondary" style="padding: 0.4rem 0.6rem;" onclick="window.showEntityDetails('${threat.entityId}')"><i class="fas fa-eye"></i></button>
+                    ${btnHTML}
                 </div>
             </td>
         `;
@@ -180,317 +166,197 @@ function populateThreatTable() {
     });
 }
 
-// Update metrics
-function updateMetrics() {
-    // Critical Threats
-    const criticalCount = window.threatData.entities.filter(e => e.severity === 'critical').length;
-    document.getElementById('criticalThreats').textContent = criticalCount;
-    
-    // Active Malware
-    const malwareCount = window.threatData.entities.filter(e => e.type === 'malware').length;
-    document.getElementById('activeMalware').textContent = malwareCount;
-    
-    // Network Clusters (simulated)
-    const clusterCount = Math.floor(window.threatData.entities.length / 3);
-    document.getElementById('networkClusters').textContent = clusterCount;
-    
-    // Monitored IPs
-    const ipCount = window.threatData.entities.filter(e => e.type === 'ip').length;
-    const totalIPs = ipCount * 1000 + Math.floor(Math.random() * 1000);
-    document.getElementById('monitoredIPs').textContent = totalIPs.toLocaleString();
+// ============================================
+// 3. AI STATISTICS UPDATE
+// ============================================
+
+function updateAIStats(threats) {
+    if (!threats || threats.length === 0) return;
+
+    const uniqueActors = new Set(threats.map(t => t.attacker)).size;
+    const highConfThreats = threats.filter(t => t.confidence > 90).length;
+    const avgConfidence = Math.floor(threats.reduce((acc, t) => acc + t.confidence, 0) / threats.length);
+
+    const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if(el) el.innerText = val;
+    };
+
+    setVal('ai-patterns', (threats.length * 3) + 12);
+    setVal('ai-confidence', avgConfidence + "%");
+    setVal('ai-groups', uniqueActors);
+    setVal('ai-high-conf', highConfThreats);
+    setVal('ai-clusters', Math.floor(threats.length / 2) + 4);
+    setVal('ai-cluster-size', Math.floor(Math.random() * 5 + 8) + " nodes");
+    setVal('ai-predictions', threats.length + 21);
+    setVal('ai-accuracy', (90 + Math.random()).toFixed(1) + "%");
 }
 
-// Setup dashboard controls
-function setupDashboardControls() {
-    document.querySelectorAll('.btn-control[data-timeframe]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.btn-control[data-timeframe]').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            updateTimeframe(btn.dataset.timeframe);
-        });
-    });
-}
+// ============================================
+// 4. UTILITIES & FIREBASE
+// ============================================
 
-// Update timeframe (simulated)
-function updateTimeframe(timeframe) {
-    showLoading();
-    
-    // Simulate data loading
-    setTimeout(() => {
-        // Update charts with simulated data
-        if (threatTimelineChart) {
-            threatTimelineChart.data.datasets.forEach(dataset => {
-                dataset.data = dataset.data.map(() => Math.floor(Math.random() * 80) + 10);
-            });
-            threatTimelineChart.update();
+async function handleBlockToggle(entityId) {
+    const user = auth.currentUser;
+    if (!user) {
+        window.showNotification("Sign in to manage blocks.", "info");
+        return;
+    }
+    const userRef = doc(db, "users", user.uid);
+    const isBlocked = window.currentUserBlocklist?.includes(entityId);
+    try {
+        if (isBlocked) {
+            await updateDoc(userRef, { blocklist: arrayRemove(entityId) });
+            window.showNotification("Threat Unblocked.", "info");
+        } else {
+            await updateDoc(userRef, { blocklist: arrayUnion(entityId) });
+            window.showNotification("Threat Blocked.", "success");
         }
-        
-        if (threatDistributionChart) {
-            threatDistributionChart.data.datasets[0].data = 
-                threatDistributionChart.data.datasets[0].data.map(() => Math.floor(Math.random() * 40) + 5);
-            threatDistributionChart.update();
-        }
-        
-        hideLoading();
-    }, 800);
-}
-
-// Start real-time updates
-function startRealTimeUpdates() {
-    // Update hero stats with animation
-    animateCounter('threatsDetected', 1247, 1250, 2000);
-    animateCounter('networksMapping', 89, 92, 2500);
-    
-    // Periodic updates
-    updateInterval = setInterval(() => {
-        // Randomly update threat counts
-        const currentThreats = parseInt(document.getElementById('threatsDetected').textContent.replace(',', ''));
-        const newThreats = currentThreats + Math.floor(Math.random() * 5);
-        animateCounter('threatsDetected', currentThreats, newThreats, 1000);
-        
-        // Update critical threats occasionally
-        if (Math.random() > 0.7) {
-            const current = parseInt(document.getElementById('criticalThreats').textContent);
-            const change = Math.random() > 0.5 ? 1 : -1;
-            document.getElementById('criticalThreats').textContent = Math.max(0, current + change);
-        }
-    }, 10000); // Update every 10 seconds
-}
-
-// Animate counter
-function animateCounter(elementId, start, end, duration) {
-    const element = document.getElementById(elementId);
-    if (!element) return;
-    
-    const range = end - start;
-    const increment = range / (duration / 16); // 60fps
-    let current = start;
-    
-    const timer = setInterval(() => {
-        current += increment;
-        if ((increment > 0 && current >= end) || (increment < 0 && current <= end)) {
-            current = end;
-            clearInterval(timer);
-        }
-        element.textContent = Math.floor(current).toLocaleString();
-    }, 16);
-}
-
-// Export threats function
-function exportThreats() {
-    const data = window.threatData.recentThreats;
-    
-    // Convert to CSV
-    const headers = ['Timestamp', 'Type', 'Entity', 'Severity', 'Confidence', 'Source'];
-    const rows = data.map(threat => [
-        threat.timestamp,
-        threat.type,
-        threat.entity,
-        threat.severity,
-        threat.confidence + '%',
-        threat.source
-    ]);
-    
-    let csv = headers.join(',') + '\n';
-    rows.forEach(row => {
-        csv += row.map(cell => `"${cell}"`).join(',') + '\n';
-    });
-    
-    // Download
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `threat-report-${Date.now()}.csv`;
-    link.click();
-    window.URL.revokeObjectURL(url);
-}
-
-// Add to blocklist (simulated)
-function addToBlocklist(entityId) {
-    const entity = window.threatData.entities.find(e => e.id === entityId);
-    if (!entity) return;
-    
-    if (confirm(`Add ${entity.name} to blocklist?`)) {
-        showLoading();
-        setTimeout(() => {
-            hideLoading();
-            showNotification(`${entity.name} has been added to the blocklist`, 'success');
-        }, 1000);
+    } catch (e) {
+        console.error(e);
+        window.showNotification("Sync Failed", "error");
     }
 }
 
-// Show notification
-function showNotification(message, type = 'info') {
-    const notification = document.createElement('div');
-    notification.style.cssText = `
-        position: fixed;
-        top: 80px;
-        right: 20px;
-        background: ${type === 'success' ? 'rgba(0, 255, 159, 0.2)' : 'rgba(0, 217, 255, 0.2)'};
-        border: 1px solid ${type === 'success' ? '#00ff9f' : '#00d9ff'};
-        color: #ffffff;
-        padding: 1rem 1.5rem;
-        border-radius: 8px;
-        z-index: 10000;
-        animation: slideIn 0.3s ease;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-    `;
-    notification.textContent = message;
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        notification.style.animation = 'slideOut 0.3s ease';
-        setTimeout(() => notification.remove(), 300);
-    }, 3000);
+function updateMetrics(threats) {
+    const totalCount = 1247 + threats.length; 
+    const criticals = threats.filter(t => t.severity.toLowerCase() === 'critical').length;
+    const highs = threats.filter(t => t.severity.toLowerCase() === 'high').length;
+
+    try {
+        const elTotal = document.getElementById('threatsDetected');
+        if(elTotal) elTotal.textContent = totalCount.toLocaleString();
+        const elCritical = document.getElementById('criticalThreats');
+        if(elCritical) elCritical.textContent = (23 + criticals).toLocaleString();
+        const elMalware = document.getElementById('activeMalware');
+        if(elMalware) elMalware.textContent = (156 + highs).toLocaleString();
+    } catch(e) {}
 }
 
-// Populate AI findings
-function populateFindings() {
-    const findingsList = document.getElementById('findingsList');
-    if (!findingsList) return;
-    
-    findingsList.innerHTML = '';
-    
-    window.threatData.aiFindings.forEach(finding => {
-        const findingItem = document.createElement('div');
-        findingItem.className = 'finding-item';
-        
-        const iconColors = {
-            'pattern': '#00d9ff',
-            'attribution': '#ff4d6d',
-            'cluster': '#b84dff',
-            'prediction': '#ff9d00'
-        };
-        
-        const iconNames = {
-            'pattern': 'fa-diagram-project',
-            'attribution': 'fa-fingerprint',
-            'cluster': 'fa-circle-nodes',
-            'prediction': 'fa-crystal-ball'
-        };
-        
-        findingItem.innerHTML = `
-            <div class="finding-icon" style="background: ${iconColors[finding.type]}20; color: ${iconColors[finding.type]};">
-                <i class="fas ${iconNames[finding.type]}"></i>
-            </div>
-            <div class="finding-content">
-                <div class="finding-title">${finding.title}</div>
-                <div class="finding-description">${finding.description}</div>
-                <div class="finding-meta">
-                    <span class="finding-time">
-                        <i class="fas fa-clock"></i> ${formatRelativeTime(finding.timestamp)}
-                    </span>
-                    <span class="finding-confidence">
-                        <i class="fas fa-check-circle"></i> ${finding.confidence}% confidence
-                    </span>
-                    <span style="color: var(--text-muted);">
-                        <i class="fas fa-link"></i> ${finding.entities.length} entities
-                    </span>
-                </div>
-            </div>
-        `;
-        
-        findingItem.style.cursor = 'pointer';
-        findingItem.addEventListener('click', () => {
-            showFindingDetails(finding);
+function updateChartsWithRealData(threats) {
+    timeStep += 0.2; 
+    if (threatTimelineChart) {
+        const now = new Date();
+        const label = now.getHours() + ':' + now.getMinutes() + ':' + now.getSeconds();
+        if (threatTimelineChart.data.labels.length > 20) threatTimelineChart.data.labels.shift();
+        threatTimelineChart.data.labels.push(label);
+
+        const intensity = threats.length * 2; 
+        const val1 = 30 + intensity + (15 * Math.sin(timeStep));
+        const val2 = 45 + intensity + (10 * Math.sin(timeStep * 0.8 + 2));
+        const val3 = 20 + (8 * Math.sin(timeStep * 0.5 + 4));
+
+        threatTimelineChart.data.datasets[0].data.push(val1);
+        threatTimelineChart.data.datasets[1].data.push(val2);
+        threatTimelineChart.data.datasets[2].data.push(val3);
+
+        threatTimelineChart.data.datasets.forEach(ds => {
+            if (ds.data.length > 20) ds.data.shift();
         });
-        
-        findingsList.appendChild(findingItem);
-    });
+        threatTimelineChart.update('none');
+    }
 }
 
-// Format relative time
-function formatRelativeTime(timestamp) {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMins / 60);
+function setupCharts() {
+    const tCtx = document.getElementById('threatTimelineChart');
+    if (tCtx && window.Chart) {
+        threatTimelineChart = new Chart(tCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { label: 'Critical', data: [], borderColor: '#ff4d6d', backgroundColor: 'rgba(255, 77, 109, 0.1)', tension: 0.4, fill: true },
+                    { label: 'High', data: [], borderColor: '#ff9d00', backgroundColor: 'rgba(255, 157, 0, 0.1)', tension: 0.4, fill: true },
+                    { label: 'Medium', data: [], borderColor: '#ffd93d', borderDash: [5, 5], tension: 0.4, fill: false }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                plugins: { legend: { position: 'top', labels: { color: '#a0aec0' } } },
+                scales: { x: { display: false }, y: { display: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#a0aec0' } } }
+            }
+        });
+    }
     
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins} minutes ago`;
-    if (diffHours < 24) return `${diffHours} hours ago`;
-    return date.toLocaleDateString();
+    const dCtx = document.getElementById('threatDistributionChart');
+    if (dCtx && window.Chart) {
+        threatDistributionChart = new Chart(dCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Ransomware', 'Phishing', 'Malware', 'C2', 'Exfil', 'Crypto'],
+                datasets: [{
+                    data: [25, 20, 30, 10, 10, 5],
+                    backgroundColor: ['#ff4d6d', '#ff9d00', '#ffd93d', '#00d9ff', '#b84dff', '#00ff9f'],
+                    borderWidth: 0
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'right', labels: { color: '#a0aec0' } } } }
+        });
+    }
 }
 
-// Show finding details
-function showFindingDetails(finding) {
-    const entities = finding.entities.map(id => 
-        window.threatData.entities.find(e => e.id === id)
-    ).filter(e => e);
-    
-    const entitiesList = entities.map(e => `
-        <div class="related-entity" onclick="showEntityDetails('${e.id}')">
-            <span>${window.threatData.entityConfig[e.type].icon} ${e.name}</span>
-            <span class="severity-badge ${e.severity}">${e.severity}</span>
-        </div>
-    `).join('');
-    
-    const modal = document.getElementById('entityModal');
-    const details = document.getElementById('entityDetails');
-    
-    details.innerHTML = `
-        <div class="entity-header">
-            <div>
-                <h2 style="margin-bottom: 0.5rem;">${finding.title}</h2>
-                <span class="entity-tag">${finding.type.toUpperCase()}</span>
-                <span class="entity-tag" style="background: rgba(0, 255, 159, 0.1); border-color: #00ff9f; color: #00ff9f;">
-                    ${finding.confidence}% Confidence
-                </span>
-            </div>
-        </div>
-        
-        <div class="entity-section">
-            <h3>Description</h3>
-            <p style="color: #a0aec0; line-height: 1.8;">${finding.description}</p>
-        </div>
-        
-        <div class="entity-section">
-            <h3>Related Entities (${entities.length})</h3>
-            <div class="related-entities">
-                ${entitiesList}
-            </div>
-        </div>
-        
-        <div class="entity-section">
-            <h3>Timeline</h3>
-            <div class="detail-grid">
-                <div class="detail-item">
-                    <div class="detail-label">Detected</div>
-                    <div class="detail-value">${new Date(finding.timestamp).toLocaleString()}</div>
-                </div>
-                <div class="detail-item">
-                    <div class="detail-label">Severity</div>
-                    <div class="detail-value" style="color: ${getSeverityColor(finding.severity)};">
-                        ${finding.severity.toUpperCase()}
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    modal.classList.add('active');
-}
-
-// Helper to get severity color
-function getSeverityColor(severity) {
-    const colors = {
-        'critical': '#ff4d6d',
-        'high': '#ff9d00',
-        'medium': '#ffd93d',
-        'low': '#00ff9f'
+function setupDashboardControls() {
+    const metricElements = {
+        threats: document.getElementById('threatsDetected'),
+        critical: document.getElementById('criticalThreats'),
+        malware: document.getElementById('activeMalware'),
+        ips: document.getElementById('monitoredIPs')
     };
-    return colors[severity] || '#00d9ff';
+
+    document.querySelectorAll('.btn-control').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            // Remove active class
+            document.querySelectorAll('.btn-control').forEach(b => b.classList.remove('active'));
+            e.target.classList.add('active');
+
+            const timeframe = e.target.getAttribute('data-timeframe');
+            
+            if (timeframe === '24h') {
+                // Real Mode
+                updateMetrics(currentThreatData); // Restore real counts
+            } else {
+                // Simulation Mode (Random Big Numbers)
+                const multiplier = timeframe === '7d' ? 7 : (timeframe === '30d' ? 30 : 90);
+                
+                // Animate numbers
+                animateValue(metricElements.threats, 1200 * multiplier + Math.random()*500);
+                animateValue(metricElements.critical, 20 * multiplier + Math.random()*10);
+                animateValue(metricElements.malware, 150 * multiplier + Math.random()*50);
+                animateValue(metricElements.ips, 8000 + Math.random()*1000);
+            }
+        });
+    });
 }
 
-// Initialize dashboard when DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        initializeDashboard();
-        populateFindings();
-    });
-} else {
-    initializeDashboard();
-    populateFindings();
+function animateValue(obj, end) {
+    if(!obj) return;
+    const start = parseInt(obj.innerHTML.replace(/,/g, '')) || 0;
+    const duration = 500;
+    let startTimestamp = null;
+    const step = (timestamp) => {
+        if (!startTimestamp) startTimestamp = timestamp;
+        const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+        obj.innerHTML = Math.floor(progress * (end - start) + start).toLocaleString();
+        if (progress < 1) window.requestAnimationFrame(step);
+    };
+    window.requestAnimationFrame(step);
 }
+
+function exportThreats() {
+    if (!window.currentThreatData.length) return window.showNotification("No data available", "info");
+    const headers = ["Timestamp", "CVE ID", "Product", "Severity", "NIST Score"];
+    const rows = window.currentThreatData.map(t => [t.timestamp, t.entityId, `"${t.entity}"`, t.severity, t.nist_score]);
+    const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `threat_report.csv`;
+    link.click();
+}
+
+function getSeverityColor(sev) { return { 'critical': '#ff4d6d', 'high': '#ff9d00', 'medium': '#ffd93d' }[sev?.toLowerCase()] || '#00ff9f'; }
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initializeDashboard);
+else initializeDashboard();

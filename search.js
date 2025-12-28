@@ -1,48 +1,23 @@
 // ============================================
-// SEARCH FUNCTIONALITY
-// Autocomplete and entity search
+// SEARCH & ENTITY DETAILS (With Live IP Intel)
 // ============================================
 
 let searchFilter = 'all';
 let searchResults = [];
 
-// Initialize search
+// 1. INITIALIZE SEARCH
 function initializeSearch() {
     const searchInput = document.getElementById('searchInput');
     const searchBtn = document.getElementById('searchBtn');
-    const suggestions = document.getElementById('searchSuggestions');
     
     if (!searchInput) return;
     
-    // Input event for autocomplete
-    searchInput.addEventListener('input', (e) => {
-        const query = e.target.value.trim();
-        
-        if (query.length >= 2) {
-            showSuggestions(query);
-        } else {
-            suggestions.classList.remove('active');
-        }
+    searchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') performSearch(searchInput.value.trim());
     });
     
-    // Search button click
     searchBtn?.addEventListener('click', () => {
         performSearch(searchInput.value.trim());
-    });
-    
-    // Enter key to search
-    searchInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            performSearch(searchInput.value.trim());
-            suggestions.classList.remove('active');
-        }
-    });
-    
-    // Click outside to close suggestions
-    document.addEventListener('click', (e) => {
-        if (!searchInput.contains(e.target) && !suggestions.contains(e.target)) {
-            suggestions.classList.remove('active');
-        }
     });
     
     // Setup filter chips
@@ -51,372 +26,202 @@ function initializeSearch() {
             document.querySelectorAll('.chip[data-search-type]').forEach(c => c.classList.remove('active'));
             chip.classList.add('active');
             searchFilter = chip.dataset.searchType;
-            
-            // Re-perform search if there's a query
-            if (searchInput.value.trim()) {
-                performSearch(searchInput.value.trim());
-            }
+            if (searchInput.value.trim()) performSearch(searchInput.value.trim());
         });
     });
 }
 
-// Show autocomplete suggestions
-function showSuggestions(query) {
-    const suggestions = document.getElementById('searchSuggestions');
-    if (!suggestions) return;
-    
-    const lowerQuery = query.toLowerCase();
-    
-    // Find matching entities
-    const matches = window.threatData.entities.filter(entity => {
-        const nameMatch = entity.name.toLowerCase().includes(lowerQuery);
-        const descMatch = entity.description.toLowerCase().includes(lowerQuery);
-        const typeMatch = searchFilter === 'all' || entity.type === searchFilter;
-        return (nameMatch || descMatch) && typeMatch;
-    }).slice(0, 8); // Limit to 8 suggestions
-    
-    if (matches.length === 0) {
-        suggestions.classList.remove('active');
-        return;
-    }
-    
-    suggestions.innerHTML = '';
-    
-    matches.forEach(entity => {
-        const item = document.createElement('div');
-        item.className = 'suggestion-item';
-        item.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 12px;">
-                <span style="font-size: 1.5rem;">${window.threatData.entityConfig[entity.type].icon}</span>
-                <div style="flex: 1;">
-                    <div style="font-weight: 600; margin-bottom: 4px;">
-                        ${highlightMatch(entity.name, query)}
-                    </div>
-                    <div style="font-size: 0.85rem; color: #718096;">
-                        ${window.threatData.entityConfig[entity.type].label}
-                    </div>
-                </div>
-                <span class="severity-badge ${entity.severity}">${entity.severity}</span>
-            </div>
-        `;
-        
-        item.addEventListener('click', () => {
-            showEntityDetails(entity.id);
-            suggestions.classList.remove('active');
-            document.getElementById('searchInput').value = entity.name;
-        });
-        
-        suggestions.appendChild(item);
-    });
-    
-    suggestions.classList.add('active');
-}
-
-// Highlight matching text
-function highlightMatch(text, query) {
-    const regex = new RegExp(`(${query})`, 'gi');
-    return text.replace(regex, '<span style="color: #00d9ff; background: rgba(0, 217, 255, 0.1);">$1</span>');
-}
-
-// Perform search
 function performSearch(query) {
-    showLoading();
+    if(window.showLoading) window.showLoading();
     
-    if (!query) {
-        document.getElementById('searchResults').innerHTML = `
-            <div style="grid-column: 1 / -1; text-align: center; padding: 4rem; color: #718096;">
-                <i class="fas fa-search" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.3;"></i>
-                <p style="font-size: 1.1rem;">Enter a search query to find threats</p>
-            </div>
-        `;
-        hideLoading();
-        return;
-    }
-    
-    // Simulate search delay
     setTimeout(() => {
         const lowerQuery = query.toLowerCase();
         
-        // Search entities
-        searchResults = window.threatData.entities.filter(entity => {
+        // Combine static data AND live data
+        let allEntities = [];
+        if (window.threatData && window.threatData.entities) {
+            allEntities = [...window.threatData.entities];
+        }
+        if (window.currentThreatData) {
+            // Map live threats to entity format
+            const liveEntities = window.currentThreatData.map(t => ({
+                id: t.entityId,
+                name: t.entity,
+                type: 'malware', // Defaulting live items to malware type for search
+                description: t.prediction || t.description,
+                severity: t.severity
+            }));
+            allEntities = [...liveEntities, ...allEntities];
+        }
+        
+        searchResults = allEntities.filter(entity => {
             const nameMatch = entity.name.toLowerCase().includes(lowerQuery);
-            const descMatch = entity.description.toLowerCase().includes(lowerQuery);
             const typeMatch = searchFilter === 'all' || entity.type === searchFilter;
-            
-            // Also search in attributes
-            let attrMatch = false;
-            if (entity.attributes) {
-                attrMatch = Object.values(entity.attributes).some(val => 
-                    String(val).toLowerCase().includes(lowerQuery)
-                );
-            }
-            
-            return (nameMatch || descMatch || attrMatch) && typeMatch;
+            return nameMatch && typeMatch;
         });
         
         displaySearchResults();
-        hideLoading();
-    }, 500);
+        if(window.hideLoading) window.hideLoading();
+    }, 400); 
 }
 
-// Display search results
 function displaySearchResults() {
     const resultsContainer = document.getElementById('searchResults');
     if (!resultsContainer) return;
+    resultsContainer.innerHTML = '';
     
     if (searchResults.length === 0) {
-        resultsContainer.innerHTML = `
-            <div style="grid-column: 1 / -1; text-align: center; padding: 4rem; color: #718096;">
-                <i class="fas fa-exclamation-circle" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.3;"></i>
-                <p style="font-size: 1.1rem;">No results found</p>
-                <p style="font-size: 0.9rem; margin-top: 0.5rem;">Try adjusting your search terms or filters</p>
-            </div>
-        `;
+        resultsContainer.innerHTML = `<div style="text-align: center; color: #718096; padding: 2rem;">No intel found.</div>`;
         return;
     }
     
-    resultsContainer.innerHTML = '';
-    
     searchResults.forEach(entity => {
-        const card = createResultCard(entity);
+        const config = (window.threatData && window.threatData.entityConfig[entity.type]) || { label: 'Threat', color: '#fff', icon: '!' };
+        const card = document.createElement('div');
+        card.className = 'result-card';
+        card.innerHTML = `
+            <div class="result-header">
+                <span class="result-type" style="color: ${config.color}; border: 1px solid ${config.color}; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem;">${config.label}</span>
+                <span class="severity-badge ${entity.severity}">${entity.severity}</span>
+            </div>
+            <div class="result-title" style="margin: 10px 0; font-size: 1.1rem; font-weight: bold;">
+                ${config.icon} ${entity.name}
+            </div>
+            <div class="result-description" style="color: #a0aec0; font-size: 0.9rem;">
+                ${entity.description ? entity.description.substring(0, 100) + '...' : 'No details available'}
+            </div>
+        `;
+        card.addEventListener('click', () => showEntityDetails(entity.id));
         resultsContainer.appendChild(card);
     });
 }
 
-// Create result card
-function createResultCard(entity) {
-    const card = document.createElement('div');
-    card.className = 'result-card';
-    
-    // Get connections count
-    const connections = window.threatData.relationships.filter(rel => 
-        rel.source === entity.id || rel.target === entity.id
-    ).length;
-    
-    // Format attributes
-    const attrs = entity.attributes ? Object.entries(entity.attributes).slice(0, 3) : [];
-    const attrsList = attrs.map(([key, val]) => `
-        <div style="margin-bottom: 4px;">
-            <span style="color: #718096; font-size: 0.85rem;">${key}:</span>
-            <span style="color: #a0aec0; font-size: 0.85rem; font-weight: 500;">${val}</span>
-        </div>
-    `).join('');
-    
-    card.innerHTML = `
-        <div class="result-header">
-            <span class="result-type" style="background: ${window.threatData.entityConfig[entity.type].color}20; 
-                  border-color: ${window.threatData.entityConfig[entity.type].color}; 
-                  color: ${window.threatData.entityConfig[entity.type].color};">
-                ${window.threatData.entityConfig[entity.type].label}
-            </span>
-            <span class="severity-badge ${entity.severity}">${entity.severity}</span>
-        </div>
-        <div class="result-title">
-            ${window.threatData.entityConfig[entity.type].icon} ${entity.name}
-        </div>
-        <div class="result-description">
-            ${entity.description}
-        </div>
-        ${attrsList ? `<div style="margin-bottom: 1rem;">${attrsList}</div>` : ''}
-        <div class="result-meta">
-            <span class="meta-item">
-                <i class="fas fa-calendar"></i>
-                ${formatDate(entity.lastSeen)}
-            </span>
-            <span class="meta-item">
-                <i class="fas fa-link"></i>
-                ${connections} connections
-            </span>
-            <span class="meta-item">
-                <i class="fas fa-chart-line"></i>
-                ${entity.confidence}% confidence
-            </span>
-        </div>
-    `;
-    
-    card.addEventListener('click', () => {
-        showEntityDetails(entity.id);
-    });
-    
-    return card;
-}
-
-// Format date
-function formatDate(dateString) {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays} days ago`;
-    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-    return date.toLocaleDateString();
-}
-
-// Show entity details in modal
+// 3. SHOW ENTITY DETAILS (The Fix for Clicking Live Items)
 function showEntityDetails(entityId) {
-    const entity = window.threatData.entities.find(e => e.id === entityId);
-    if (!entity) return;
+    let entity = null;
+
+    // A. Check Static Data first
+    if (window.threatData && window.threatData.entities) {
+        entity = window.threatData.entities.find(e => e.id === entityId);
+    }
+    
+    // B. If not found, Check LIVE Data (This fixes your issue!)
+    if (!entity && window.currentThreatData) {
+        const liveMatch = window.currentThreatData.find(t => t.entityId === entityId);
+        if (liveMatch) {
+            // Convert live format to UI format
+            entity = {
+                id: liveMatch.entityId,
+                name: liveMatch.entity,
+                type: liveMatch.type || 'malware',
+                severity: liveMatch.severity,
+                confidence: liveMatch.confidence,
+                description: liveMatch.prediction,
+                attributes: {
+                    "Attacker": liveMatch.attacker,
+                    "Tool": liveMatch.tool,
+                    "NIST Score": liveMatch.nist_score,
+                    "Vendor": liveMatch.vendor
+                }
+            };
+        }
+    }
+
+    if (!entity) return; // Still not found? Exit.
     
     const modal = document.getElementById('entityModal');
     const details = document.getElementById('entityDetails');
+    const config = (window.threatData && window.threatData.entityConfig[entity.type]) || { icon: '?', color: '#00d9ff' };
     
-    // Get related entities
-    const relatedIds = new Set();
-    window.threatData.relationships.forEach(rel => {
-        if (rel.source === entityId) relatedIds.add(rel.target);
-        if (rel.target === entityId) relatedIds.add(rel.source);
-    });
-    
-    const relatedEntities = Array.from(relatedIds)
-        .map(id => window.threatData.entities.find(e => e.id === id))
-        .filter(e => e);
-    
-    // Build attributes HTML
-    const attributesHTML = entity.attributes ? Object.entries(entity.attributes).map(([key, val]) => `
-        <div class="detail-item">
-            <div class="detail-label">${key.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</div>
-            <div class="detail-value">${val}</div>
-        </div>
-    `).join('') : '';
-    
-    // Build related entities HTML
-    const relatedHTML = relatedEntities.map(e => `
-        <div class="related-entity" onclick="showEntityDetails('${e.id}')">
-            <span>${window.threatData.entityConfig[e.type].icon} ${e.name}</span>
-            <span class="severity-badge ${e.severity}">${e.severity}</span>
-        </div>
-    `).join('');
-    
+    // --- GEO IP LOGIC ---
+    let liveDataHTML = '';
+    // If it looks like an IP
+    if (entity.type === 'ip' || (entity.name && entity.name.match(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/))) {
+        liveDataHTML = `
+            <div class="entity-section" style="margin-top: 1.5rem; border: 1px dashed #00d9ff; padding: 15px; border-radius: 8px; background: rgba(0, 217, 255, 0.05);">
+                <h3 style="color: #00d9ff; font-size: 1rem; margin-bottom: 0.5rem;"><i class="fas fa-globe"></i> Live Geopolitical Intel</h3>
+                <div id="live-ip-data" style="color: #fff;">
+                    <i class="fas fa-circle-notch fa-spin"></i> Triangulating Signal...
+                </div>
+            </div>
+        `;
+        setTimeout(() => enrichIPData(entity.name), 100);
+    }
+
+    // --- BUILD UI ---
     details.innerHTML = `
-        <div class="entity-header">
-            <div class="entity-icon-large" style="background: ${window.threatData.entityConfig[entity.type].color}20; 
-                 color: ${window.threatData.entityConfig[entity.type].color};">
-                ${window.threatData.entityConfig[entity.type].icon}
+        <div class="entity-header" style="display: flex; gap: 20px; align-items: flex-start; margin-bottom: 1.5rem;">
+            <div style="font-size: 3rem; color: ${config.color}; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; border: 1px solid ${config.color};">
+                ${config.icon}
             </div>
-            <div class="entity-info">
-                <h2>${entity.name}</h2>
-                <p style="color: #a0aec0; margin-bottom: 0.5rem;">${entity.description}</p>
-                <div class="entity-tags">
-                    <span class="entity-tag">${window.threatData.entityConfig[entity.type].label}</span>
-                    <span class="entity-tag" style="background: ${getSeverityColor(entity.severity)}20; 
-                          border-color: ${getSeverityColor(entity.severity)}; 
-                          color: ${getSeverityColor(entity.severity)};">
-                        ${entity.severity.toUpperCase()}
-                    </span>
-                    <span class="entity-tag" style="background: rgba(0, 255, 159, 0.1); 
-                          border-color: #00ff9f; color: #00ff9f;">
-                        ${entity.confidence}% Confidence
-                    </span>
+            <div>
+                <h2 style="margin: 0; font-size: 2rem; font-weight: 700;">${entity.name}</h2>
+                <div style="display: flex; gap: 10px; margin-top: 10px; align-items: center;">
+                    <span class="severity-badge ${entity.severity}" style="font-size: 0.9rem; padding: 4px 12px;">${entity.severity ? entity.severity.toUpperCase() : 'UNKNOWN'}</span>
+                    <span style="color: #a0aec0;">|</span>
+                    <span style="color: #00ff9f;">${entity.confidence || 90}% Confidence</span>
                 </div>
             </div>
         </div>
         
-        <div class="entity-section">
-            <h3><i class="fas fa-info-circle"></i> Details</h3>
-            <div class="detail-grid">
-                <div class="detail-item">
-                    <div class="detail-label">Entity ID</div>
-                    <div class="detail-value">${entity.id}</div>
-                </div>
-                <div class="detail-item">
-                    <div class="detail-label">First Seen</div>
-                    <div class="detail-value">${entity.firstSeen}</div>
-                </div>
-                <div class="detail-item">
-                    <div class="detail-label">Last Seen</div>
-                    <div class="detail-value">${entity.lastSeen}</div>
-                </div>
-                <div class="detail-item">
-                    <div class="detail-label">Connections</div>
-                    <div class="detail-value">${relatedEntities.length}</div>
-                </div>
+        ${liveDataHTML}
+
+        <div class="entity-section" style="margin-top: 20px;">
+            <h3 style="color: #a0aec0; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px;">Attributes</h3>
+            <div class="detail-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px;">
+                ${Object.entries(entity.attributes || {}).map(([key, val]) => `
+                    <div class="detail-item" style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 4px;">
+                        <div class="detail-label" style="color: #718096; font-size: 0.8rem; margin-bottom: 4px;">${key.toUpperCase()}</div>
+                        <div class="detail-value" style="color: #fff;">${val}</div>
+                    </div>
+                `).join('')}
             </div>
         </div>
-        
-        ${attributesHTML ? `
-        <div class="entity-section">
-            <h3><i class="fas fa-list"></i> Attributes</h3>
-            <div class="detail-grid">
-                ${attributesHTML}
-            </div>
+
+        <div class="entity-section" style="margin-top: 25px;">
+            <p style="color: #cbd5e0; line-height: 1.6; font-size: 1rem; border-left: 3px solid ${config.color}; padding-left: 15px;">
+                ${entity.description || "No description available."}
+            </p>
         </div>
-        ` : ''}
-        
-        ${relatedHTML ? `
-        <div class="entity-section">
-            <h3><i class="fas fa-network-wired"></i> Related Entities (${relatedEntities.length})</h3>
-            <div class="related-entities">
-                ${relatedHTML}
-            </div>
-        </div>
-        ` : ''}
-        
-        <div class="entity-section">
-            <h3><i class="fas fa-shield-halved"></i> Actions</h3>
-            <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                <button class="btn-secondary" onclick="addToBlocklist('${entity.id}')">
-                    <i class="fas fa-ban"></i> Add to Blocklist
-                </button>
-                <button class="btn-secondary" onclick="exportEntityReport('${entity.id}')">
-                    <i class="fas fa-download"></i> Export Report
-                </button>
-                <button class="btn-secondary" onclick="showInNetwork('${entity.id}')">
-                    <i class="fas fa-diagram-project"></i> View in Network
-                </button>
-            </div>
+
+        <div class="entity-section" style="margin-top: 30px; display: flex; gap: 15px;">
+            <button class="btn-primary" onclick="if(window.triggerManualReport) window.triggerManualReport()"><i class="fas fa-flag"></i> Report</button>
+            <button class="btn-secondary" style="border-color: #ff4d6d; color: #ff4d6d;" onclick="if(window.addToBlocklist) window.addToBlocklist('${entity.id}')"><i class="fas fa-ban"></i> Block Entity</button>
         </div>
     `;
     
-    modal.classList.add('active');
+    if(modal) modal.classList.add('active');
 }
+async function enrichIPData(ipAddress) {
+    const container = document.getElementById('live-ip-data');
+    if (!container) return;
 
-// Export entity report
-function exportEntityReport(entityId) {
-    const entity = window.threatData.entities.find(e => e.id === entityId);
-    if (!entity) return;
-    
-    showLoading();
-    
-    setTimeout(() => {
-        const report = {
-            entity: entity,
-            exportDate: new Date().toISOString(),
-            connections: window.threatData.relationships.filter(rel => 
-                rel.source === entityId || rel.target === entityId
-            )
-        };
+    if (ipAddress.startsWith('192.168') || ipAddress.startsWith('10.') || ipAddress.startsWith('127.')) {
+        container.innerHTML = `<span style="color: #ffd93d;">Private Network Address (Localhost)</span>`;
+        return;
+    }
+
+    try {
+        const response = await fetch(`https://ipapi.co/${ipAddress}/json/`);
+        const data = await response.json();
         
-        const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `${entity.name.replace(/[^a-z0-9]/gi, '_')}_report_${Date.now()}.json`;
-        link.click();
-        window.URL.revokeObjectURL(url);
-        
-        hideLoading();
-        showNotification(`Report for ${entity.name} has been exported`, 'success');
-    }, 800);
+        if (data.error) throw new Error("API Limit");
+
+        container.innerHTML = `
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.9rem;">
+                <div><span style="color:#718096">Country:</span> ${data.country_name} ${data.country_code}</div>
+                <div><span style="color:#718096">City:</span> ${data.city}</div>
+                <div><span style="color:#718096">ISP:</span> ${data.org}</div>
+                <div><span style="color:#718096">ASN:</span> ${data.asn}</div>
+            </div>
+        `;
+    } catch (error) {
+        container.innerHTML = `<span style="color: #ff4d6d;">Geolocation Unavailable (API Rate Limit or Network Error)</span>`;
+    }
 }
 
-// Show entity in network map
-function showInNetwork(entityId) {
-    closeModal();
-    scrollToSection('network');
-    
-    // Highlight the entity in network after a brief delay
-    setTimeout(() => {
-        // This would integrate with the network visualization
-        showNotification(`Focused on entity in network map`, 'info');
-    }, 1000);
-}
-
-// Initialize search when DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeSearch);
-} else {
-    initializeSearch();
-}
+// EXPORTS
+window.showEntityDetails = showEntityDetails;
+window.viewThreatDetails = showEntityDetails; // Alias for Dashboard compatibility
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initializeSearch);
+else initializeSearch();

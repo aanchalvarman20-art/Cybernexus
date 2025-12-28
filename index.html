@@ -27,7 +27,16 @@
                 <button class="btn-icon" id="themeToggle">
                     <i class="fas fa-moon"></i>
                 </button>
-                <button class="btn-primary">Sign In</button>
+                <div id="authContainer" class="nav-actions">
+
+    <button id="authBtn" class="btn-primary">
+        <i class="fab fa-google"></i> Sign In
+    </button>
+    <div id="userProfile" style="display: none; align-items: center; gap: 10px;">
+        <img id="userAvatar" src="" alt="User" style="width: 35px; height: 35px; border-radius: 50%; border: 2px solid var(--neon-blue);">
+        <button id="signOutBtn" class="btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">Sign Out</button>
+    </div>
+</div>
             </div>
         </div>
     </nav>
@@ -280,89 +289,70 @@
             <div class="section-header">
                 <h2 class="section-title">AI Threat Analysis</h2>
                 <p class="section-description">Machine learning powered pattern detection and attribution</p>
+                <button id="aiBtn" class="btn-primary" onclick="analyzeThreatsWithGemini()" style="margin-top: 1rem;">
+                    <i class="fas fa-brain"></i> Generate AI Report
+                </button>
             </div>
 
             <div class="analysis-grid">
-                <div class="analysis-card">
-                    <div class="card-icon">
-                        <i class="fas fa-brain"></i>
-                    </div>
-                    <h3>Pattern Recognition</h3>
-                    <p>AI identifies recurring attack patterns and shared infrastructure across cybercriminal networks</p>
-                    <div class="analysis-results">
-                        <div class="result-item">
-                            <span class="result-label">Patterns Detected:</span>
-                            <span class="result-value">67</span>
-                        </div>
-                        <div class="result-item">
-                            <span class="result-label">Avg. Confidence:</span>
-                            <span class="result-value">89.3%</span>
-                        </div>
-                    </div>
-                </div>
+    <div class="analysis-card">
+        <div class="card-icon"><i class="fas fa-brain"></i></div>
+        <h3>Pattern Recognition</h3>
+        <p>AI identifies recurring attack patterns...</p>
+        <div class="analysis-results">
+            <div class="result-item">
+                <span class="result-label">Patterns Detected:</span>
+                <span class="result-value" id="ai-patterns">0</span> </div>
+            <div class="result-item">
+                <span class="result-label">Avg. Confidence:</span>
+                <span class="result-value" id="ai-confidence">0%</span> </div>
+        </div>
+    </div>
 
-                <div class="analysis-card">
-                    <div class="card-icon">
-                        <i class="fas fa-user-secret"></i>
-                    </div>
-                    <h3>Threat Attribution</h3>
-                    <p>Automatically link attacks to known threat actor groups based on behavioral analysis</p>
-                    <div class="analysis-results">
-                        <div class="result-item">
-                            <span class="result-label">Groups Identified:</span>
-                            <span class="result-value">23</span>
-                        </div>
-                        <div class="result-item">
-                            <span class="result-label">High Confidence:</span>
-                            <span class="result-value">18</span>
-                        </div>
-                    </div>
-                </div>
+    <div class="analysis-card">
+        <div class="card-icon"><i class="fas fa-user-secret"></i></div>
+        <h3>Threat Attribution</h3>
+        <p>Automatically link attacks to known threat actors...</p>
+        <div class="analysis-results">
+            <div class="result-item">
+                <span class="result-label">Groups Identified:</span>
+                <span class="result-value" id="ai-groups">0</span> </div>
+            <div class="result-item">
+                <span class="result-label">High Confidence:</span>
+                <span class="result-value" id="ai-high-conf">0</span> </div>
+        </div>
+    </div>
 
-                <div class="analysis-card">
-                    <div class="card-icon">
-                        <i class="fas fa-chart-network"></i>
-                    </div>
-                    <h3>Network Clustering</h3>
-                    <p>Discover hidden connections and criminal network structures using graph algorithms</p>
-                    <div class="analysis-results">
-                        <div class="result-item">
-                            <span class="result-label">Clusters Found:</span>
-                            <span class="result-value">47</span>
-                        </div>
-                        <div class="result-item">
-                            <span class="result-label">Avg. Size:</span>
-                            <span class="result-value">12 nodes</span>
-                        </div>
-                    </div>
-                </div>
+    <div class="analysis-card">
+        <div class="card-icon"><i class="fas fa-solid fa-chart-line""></i></div>
+        <h3>Network Clustering</h3>
+        <p>Discover hidden connections using graph algorithms...</p>
+        <div class="analysis-results">
+            <div class="result-item">
+                <span class="result-label">Clusters Found:</span>
+                <span class="result-value" id="ai-clusters">0</span> </div>
+            <div class="result-item">
+                <span class="result-label">Avg. Size:</span>
+                <span class="result-value" id="ai-cluster-size">0 nodes</span> </div>
+        </div>
+    </div>
 
-                <div class="analysis-card">
-                    <div class="card-icon">
-                        <i class="fas fa-clock-rotate-left"></i>
-                    </div>
-                    <h3>Predictive Intelligence</h3>
-                    <p>Forecast potential attack vectors and emerging threats based on historical data</p>
-                    <div class="analysis-results">
-                        <div class="result-item">
-                            <span class="result-label">Predictions:</span>
-                            <span class="result-value">34</span>
-                        </div>
-                        <div class="result-item">
-                            <span class="result-label">Accuracy Rate:</span>
-                            <span class="result-value">91.2%</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
+    <div class="analysis-card">
+        <div class="card-icon"><i class="fas fa-network-wired"></i></div>
+        <h3>Predictive Intelligence</h3>
+        <p>Forecast potential attack vectors...</p>
+        <div class="analysis-results">
+            <div class="result-item">
+                <span class="result-label">Predictions:</span>
+                <span class="result-value" id="ai-predictions">0</span> </div>
+            <div class="result-item">
+                <span class="result-label">Accuracy Rate:</span>
+                <span class="result-value" id="ai-accuracy">91.2%</span> </div>
+        </div>
+    </div>
+</div>
 
-            <!-- Recent Findings -->
-            <div class="findings-card">
-                <h3>Recent AI Findings</h3>
-                <div class="findings-list" id="findingsList">
-                    <!-- Populated by JavaScript -->
-                </div>
-            </div>
+
         </div>
     </section>
 
@@ -418,12 +408,15 @@
     </div>
 
     <!-- Scripts -->
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="data.js"></script>
-    <script src="network.js"></script>
-    <script src="dashboard.js"></script>
-    <script src="search.js"></script>
-    <script src="main.js"></script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script src="data.js"></script>
+<script src="network.js"></script>
+<script type="module" src="dashboard.js"></script>
+<script src="search.js"></script>
+<script src="main.js"></script>
+<script src="ai.js"></script> 
+<script type="module" src="auth.js"></script>
 </body>
 </html>

@@ -1,425 +1,325 @@
 // ============================================
-// NETWORK GRAPH VISUALIZATION
-// Using D3.js for interactive network mapping
+// NETWORK GRAPH VISUALIZATION (Interactive Spider Web)
 // ============================================
 
 class NetworkGraph {
     constructor(containerId) {
         this.container = d3.select(containerId);
-        this.width = this.container.node().clientWidth;
-        this.height = this.container.node().clientHeight;
+        const node = this.container.node();
+        this.width = node ? node.clientWidth : 800;
+        this.height = node ? node.clientHeight : 600;
         
+        // Clear previous if any
+        this.container.selectAll("*").remove();
+
         this.svg = this.container.append('svg')
-            .attr('width', this.width)
-            .attr('height', this.height);
+            .attr('width', '100%')
+            .attr('height', '100%')
+            .attr('viewBox', [0, 0, this.width, this.height])
+            .style('cursor', 'move');
         
-        // Create groups for different layers
-        this.linkGroup = this.svg.append('g').attr('class', 'links');
-        this.nodeGroup = this.svg.append('g').attr('class', 'nodes');
+        // Add a group for the graph content
+        this.g = this.svg.append('g');
+
+        this.linkGroup = this.g.append('g').attr('class', 'links');
+        this.nodeGroup = this.g.append('g').attr('class', 'nodes');
         
-        // Initialize zoom behavior
+        // Zoom behavior
         this.zoom = d3.zoom()
             .scaleExtent([0.1, 4])
             .on('zoom', (event) => {
-                this.linkGroup.attr('transform', event.transform);
-                this.nodeGroup.attr('transform', event.transform);
+                this.g.attr('transform', event.transform);
             });
-        
         this.svg.call(this.zoom);
         
-        // Initialize force simulation
+        // --- SPIDER WEB PHYSICS ---
         this.simulation = d3.forceSimulation()
-            .force('link', d3.forceLink().id(d => d.id).distance(150))
-            .force('charge', d3.forceManyBody().strength(-500))
-            .force('center', d3.forceCenter(this.width / 2, this.height / 2))
-            .force('collision', d3.forceCollide().radius(50));
+            .force('link', d3.forceLink().id(d => d.id).distance(150)) // Distance between connected nodes
+            .force('charge', d3.forceManyBody().strength(-500)) // Repel force (keeps them apart)
+            .force('collide', d3.forceCollide().radius(60).iterations(2)) // Prevent overlap
+            .force('center', d3.forceCenter(this.width / 2, this.height / 2));
         
-        this.nodes = [];
-        this.links = [];
-        this.filters = {
-            type: 'all',
-            severity: 'all'
-        };
+        this.allNodes = [];
+        this.allLinks = [];
+        this.filters = { type: 'all', severity: 'all' };
     }
     
-    loadData(entities, relationships) {
-        // Process entities as nodes
-        this.allNodes = entities.map(entity => ({
-            ...entity,
-            x: this.width / 2 + (Math.random() - 0.5) * 400,
-            y: this.height / 2 + (Math.random() - 0.5) * 400
-        }));
+    // --- DATA PROCESSING (The Web Builder) ---
+    updateData(newEntities) {
+        // Clear old data to prevent ghosts if needed, or keep appending
+        // For a live feed, we usually append.
         
-        // Process relationships as links
-        this.allLinks = relationships.map(rel => ({
-            ...rel,
-            source: rel.source,
-            target: rel.target
-        }));
-        
-        this.applyFilters();
-    }
-    
-    applyFilters() {
-        // Filter nodes
-        this.nodes = this.allNodes.filter(node => {
-            const typeMatch = this.filters.type === 'all' || node.type === this.filters.type;
-            const severityMatch = this.filters.severity === 'all' || node.severity === this.filters.severity;
-            return typeMatch && severityMatch;
+        newEntities.forEach(t => {
+            // 1. Threat Actor (The Hub) - Central Node
+            const actorId = `actor-${t.attacker.replace(/\s+/g, '')}`;
+            this.addNode({ 
+                id: actorId, 
+                type: 'threat-actor', 
+                name: t.attacker, 
+                severity: 'critical' 
+            });
+
+            // 2. The Tool/Malware (The Bridge)
+            const toolId = `tool-${t.tool.replace(/\s+/g, '')}`;
+            this.addNode({ 
+                id: toolId, 
+                type: 'malware', 
+                name: t.tool, 
+                severity: 'high' 
+            });
+
+            // 3. The Victim/Target (The Leaf)
+            const victimId = t.entityId;
+            this.addNode({ 
+                id: victimId, 
+                type: 'domain', // Visualizing victim as a domain/endpoint
+                name: t.entity, 
+                severity: t.severity 
+            });
+
+            // --- CONNECT THE WEB ---
+            // Actor uses Tool
+            this.addLink(actorId, toolId);
+            // Tool attacks Victim
+            this.addLink(toolId, victimId);
         });
-        
-        // Filter links to only include those between visible nodes
-        const nodeIds = new Set(this.nodes.map(n => n.id));
-        this.links = this.allLinks.filter(link => 
-            nodeIds.has(link.source.id || link.source) && 
-            nodeIds.has(link.target.id || link.target)
-        );
-        
+
         this.updateGraph();
     }
+
+    addNode(n) {
+        if (!this.allNodes.find(x => x.id === n.id)) {
+            // Spawn new nodes near the center
+            this.allNodes.push({ ...n, x: this.width/2 + (Math.random() - 0.5) * 50, y: this.height/2 + (Math.random() - 0.5) * 50 });
+        }
+    }
+
+    addLink(sourceId, targetId) {
+        const exists = this.allLinks.find(l => 
+            (l.source.id === sourceId && l.target.id === targetId) ||
+            (l.source === sourceId && l.target === targetId)
+        );
+        if (!exists) {
+            this.allLinks.push({ source: sourceId, target: targetId });
+        }
+    }
     
+    setFilter(key, val) { 
+        this.filters[key] = val; 
+        this.updateGraph(); 
+    }
+    
+    // --- DRAWING THE GRAPH ---
     updateGraph() {
-        // Update node count display
-        document.getElementById('nodeCount').textContent = this.nodes.length;
-        document.getElementById('edgeCount').textContent = this.links.length;
+        // 1. Filter Data
+        const nodes = this.allNodes.filter(n => 
+            (this.filters.type === 'all' || n.type === this.filters.type) &&
+            (this.filters.severity === 'all' || n.severity.toLowerCase() === this.filters.severity.toLowerCase())
+        );
         
-        // Update links
-        const link = this.linkGroup
-            .selectAll('line')
-            .data(this.links, d => `${d.source.id || d.source}-${d.target.id || d.target}`);
+        const nodeIds = new Set(nodes.map(n => n.id));
+        const links = this.allLinks.filter(l => 
+            nodeIds.has(l.source.id || l.source) && nodeIds.has(l.target.id || l.target)
+        );
+
+        // Update Stats UI
+        const countEl = document.getElementById('nodeCount');
+        if (countEl) countEl.textContent = nodes.length;
+        const connEl = document.getElementById('edgeCount'); // Assuming you have this ID in HTML
+        if (connEl) connEl.textContent = links.length;
+
+        // 2. Draw Links
+        const link = this.linkGroup.selectAll('line')
+            .data(links, d => `${d.source.id || d.source}-${d.target.id || d.target}`);
         
         link.exit().remove();
         
-        const linkEnter = link.enter()
-            .append('line')
+        const linkEnter = link.enter().append('line')
             .attr('stroke', '#00d9ff')
-            .attr('stroke-opacity', 0.3)
-            .attr('stroke-width', d => Math.max(1, d.confidence / 30));
-        
-        this.link = linkEnter.merge(link);
-        
-        // Update nodes
-        const node = this.nodeGroup
-            .selectAll('g.node')
-            .data(this.nodes, d => d.id);
-        
-        node.exit().remove();
-        
-        const nodeEnter = node.enter()
-            .append('g')
-            .attr('class', 'node')
-            .call(this.drag());
-        
-        // Add circles
-        nodeEnter.append('circle')
-            .attr('r', d => this.getNodeSize(d))
-            .attr('fill', d => this.getNodeColor(d))
-            .attr('stroke', d => this.getNodeStrokeColor(d))
-            .attr('stroke-width', 3)
-            .attr('opacity', 0.8);
-        
-        // Add glow effect
-        nodeEnter.append('circle')
-            .attr('r', d => this.getNodeSize(d) + 5)
-            .attr('fill', 'none')
-            .attr('stroke', d => this.getNodeColor(d))
-            .attr('stroke-width', 2)
-            .attr('opacity', 0.3);
-        
-        // Add text labels
-        nodeEnter.append('text')
-            .attr('dy', d => this.getNodeSize(d) + 20)
-            .attr('text-anchor', 'middle')
-            .attr('fill', '#ffffff')
-            .attr('font-size', '12px')
-            .attr('font-weight', '600')
-            .text(d => this.truncateText(d.name, 15));
-        
-        // Add type icon
-        nodeEnter.append('text')
-            .attr('text-anchor', 'middle')
-            .attr('dy', 5)
-            .attr('font-size', '20px')
-            .text(d => window.threatData.entityConfig[d.type].icon);
-        
-        this.node = nodeEnter.merge(node);
-        
-        // Add hover and click events
-        this.node
-            .on('mouseover', (event, d) => this.handleNodeHover(event, d))
-            .on('mouseout', () => this.handleNodeOut())
-            .on('click', (event, d) => this.handleNodeClick(event, d));
-        
-        // Update simulation
-        this.simulation
-            .nodes(this.nodes)
-            .on('tick', () => this.ticked());
-        
-        this.simulation
-            .force('link')
-            .links(this.links);
-        
-        this.simulation.alpha(1).restart();
-    }
-    
-    ticked() {
-        this.link
-            .attr('x1', d => d.source.x)
-            .attr('y1', d => d.source.y)
-            .attr('x2', d => d.target.x)
-            .attr('y2', d => d.target.y);
-        
-        this.node
-            .attr('transform', d => `translate(${d.x},${d.y})`);
-    }
-    
-    drag() {
-        return d3.drag()
-            .on('start', (event, d) => {
-                if (!event.active) this.simulation.alphaTarget(0.3).restart();
-                d.fx = d.x;
-                d.fy = d.y;
-            })
-            .on('drag', (event, d) => {
-                d.fx = event.x;
-                d.fy = event.y;
-            })
-            .on('end', (event, d) => {
-                if (!event.active) this.simulation.alphaTarget(0);
-                d.fx = null;
-                d.fy = null;
-            });
-    }
-    
-    handleNodeHover(event, d) {
-        // Highlight connected nodes and links
-        const connectedNodeIds = new Set();
-        connectedNodeIds.add(d.id);
-        
-        this.links.forEach(link => {
-            const sourceId = link.source.id || link.source;
-            const targetId = link.target.id || link.target;
+            .attr('stroke-opacity', 0.2)
+            .attr('stroke-width', 1.5); // Thicker lines for visibility
             
-            if (sourceId === d.id) connectedNodeIds.add(targetId);
-            if (targetId === d.id) connectedNodeIds.add(sourceId);
+        const allLinks = linkEnter.merge(link);
+
+        // 3. Draw Nodes
+        const node = this.nodeGroup.selectAll('g.node')
+            .data(nodes, d => d.id);
+        
+        node.exit().transition().duration(300).attr("opacity", 0).remove(); // Smooth exit
+
+        const nodeEnter = node.enter().append('g')
+            .attr('class', 'node')
+            .style('cursor', 'pointer')
+            // Add Drag Behavior
+            .call(d3.drag()
+                .on('start', (e, d) => {
+                    if (!e.active) this.simulation.alphaTarget(0.3).restart();
+                    d.fx = d.x; d.fy = d.y;
+                })
+                .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
+                .on('end', (e, d) => {
+                    if (!e.active) this.simulation.alphaTarget(0);
+                    d.fx = null; d.fy = null;
+                })
+            );
+
+        // Outer Glow Circle
+        nodeEnter.append('circle').attr('class', 'glow')
+            .attr('r', d => this.getSize(d.type) + 8)
+            .attr('fill', 'none')
+            .attr('stroke', d => this.getColor(d.severity))
+            .attr('stroke-width', 2)
+            .attr('opacity', 0.5);
+
+        // Main Node Circle
+        nodeEnter.append('circle')
+            .attr('r', d => this.getSize(d.type))
+            .attr('fill', '#0f172a') // Dark background for contrast
+            .attr('stroke', d => this.getColor(d.severity))
+            .attr('stroke-width', 2);
+
+        // Icon Text
+        nodeEnter.append('text')
+            .attr('text-anchor', 'middle')
+            .attr('dy', 5) // Center vertically
+            .attr('font-family', '"Font Awesome 6 Free"')
+            .attr('font-weight', '900')
+            .attr('fill', '#fff')
+            .attr('font-size', d => this.getSize(d.type) - 4) // Scale icon with node
+            .text(d => this.getIcon(d.type));
+
+        const allNodes = nodeEnter.merge(node);
+        
+        // --- EVENTS (Click & Hover) ---
+        // We attach events to the MERGED selection so both new and old nodes respond
+        allNodes
+            .on('click', (event, d) => {
+                // Stop click from propagating to zoom
+                event.stopPropagation();
+                console.log("Clicked Node:", d.name); // Debug
+                if(window.viewThreatDetails) window.viewThreatDetails(d.id);
+            })
+            .on('mouseover', (event, d) => this.showTooltip(event, d))
+            .on('mouseout', () => this.hideTooltip());
+
+        // 4. Tick Function (Animation Loop)
+        this.simulation.nodes(nodes).on('tick', () => {
+            allLinks
+                .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+                .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+            
+            allNodes.attr('transform', d => `translate(${d.x},${d.y})`);
         });
         
-        this.node.selectAll('circle')
-            .attr('opacity', node => connectedNodeIds.has(node.id) ? 1 : 0.2);
-        
-        this.link
-            .attr('stroke-opacity', link => {
-                const sourceId = link.source.id || link.source;
-                const targetId = link.target.id || link.target;
-                return (sourceId === d.id || targetId === d.id) ? 0.8 : 0.1;
-            })
-            .attr('stroke-width', link => {
-                const sourceId = link.source.id || link.source;
-                const targetId = link.target.id || link.target;
-                return (sourceId === d.id || targetId === d.id) ? 4 : 1;
-            });
-        
-        // Show tooltip
-        this.showTooltip(event, d);
+        this.simulation.force('link').links(links);
+        this.simulation.alpha(1).restart();
     }
-    
-    handleNodeOut() {
-        this.node.selectAll('circle')
-            .attr('opacity', 0.8);
-        
-        this.link
-            .attr('stroke-opacity', 0.3)
-            .attr('stroke-width', d => Math.max(1, d.confidence / 30));
-        
-        this.hideTooltip();
-    }
-    
-    handleNodeClick(event, d) {
-        event.stopPropagation();
-        showEntityDetails(d.id);
-    }
-    
+
+    // --- TOOLTIP SYSTEM ---
     showTooltip(event, d) {
-        const tooltip = d3.select('body')
-            .append('div')
-            .attr('class', 'network-tooltip')
-            .style('position', 'absolute')
-            .style('background', 'rgba(26, 31, 53, 0.98)')
-            .style('border', '1px solid rgba(0, 217, 255, 0.5)')
-            .style('border-radius', '8px')
-            .style('padding', '12px')
-            .style('color', '#ffffff')
-            .style('font-size', '13px')
-            .style('pointer-events', 'none')
-            .style('z-index', '1000')
-            .style('box-shadow', '0 4px 16px rgba(0, 217, 255, 0.3)');
-        
-        tooltip.html(`
-            <div style="margin-bottom: 8px;">
-                <strong style="font-size: 14px; color: ${this.getNodeColor(d)};">${d.name}</strong>
+        // Highlight Node
+        d3.select(event.currentTarget).select('.glow')
+            .transition().duration(200)
+            .attr('stroke-width', 4)
+            .attr('opacity', 1);
+
+        // Create Tooltip div if not exists
+        let tooltip = document.getElementById('network-tooltip');
+        if (!tooltip) {
+            tooltip = document.createElement('div');
+            tooltip.id = 'network-tooltip';
+            tooltip.style.cssText = `
+                position: absolute;
+                background: rgba(15, 23, 42, 0.95);
+                border: 1px solid #00d9ff;
+                padding: 10px 15px;
+                border-radius: 8px;
+                color: #fff;
+                pointer-events: none;
+                z-index: 10000;
+                font-family: 'Inter', sans-serif;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+                backdrop-filter: blur(5px);
+                min-width: 150px;
+            `;
+            document.body.appendChild(tooltip);
+        }
+
+        // Content
+        const color = this.getColor(d.severity);
+        tooltip.style.borderColor = color;
+        tooltip.innerHTML = `
+            <div style="font-weight: 700; font-size: 1rem; margin-bottom: 4px;">${d.name}</div>
+            <div style="font-size: 0.8rem; color: #94a3b8; display: flex; justify-content: space-between;">
+                <span>${d.type.toUpperCase()}</span>
+                <span style="color: ${color}">${d.severity.toUpperCase()}</span>
             </div>
-            <div style="color: #a0aec0; margin-bottom: 4px;">
-                ${window.threatData.entityConfig[d.type].label}
-            </div>
-            <div style="color: #a0aec0; margin-bottom: 8px;">
-                ${d.description}
-            </div>
-            <div style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid rgba(0, 217, 255, 0.2);">
-                <span>Severity: <strong style="color: ${this.getSeverityColor(d.severity)};">${d.severity.toUpperCase()}</strong></span>
-                <span>Confidence: <strong style="color: #00ff9f;">${d.confidence}%</strong></span>
-            </div>
-        `);
-        
-        tooltip
-            .style('left', (event.pageX + 15) + 'px')
-            .style('top', (event.pageY - 15) + 'px');
+        `;
+
+        // Positioning
+        const x = event.pageX + 15;
+        const y = event.pageY - 15;
+        tooltip.style.left = `${x}px`;
+        tooltip.style.top = `${y}px`;
+        tooltip.style.display = 'block';
     }
-    
+
     hideTooltip() {
-        d3.selectAll('.network-tooltip').remove();
-    }
-    
-    getNodeSize(d) {
-        const baseSize = 25;
-        const severityMultiplier = {
-            'critical': 1.5,
-            'high': 1.3,
-            'medium': 1.1,
-            'low': 1
-        };
-        return baseSize * (severityMultiplier[d.severity] || 1);
-    }
-    
-    getNodeColor(d) {
-        return window.threatData.entityConfig[d.type].color;
-    }
-    
-    getNodeStrokeColor(d) {
-        const colors = {
-            'critical': '#ff4d6d',
-            'high': '#ff9d00',
-            'medium': '#ffd93d',
-            'low': '#00ff9f'
-        };
-        return colors[d.severity] || '#00d9ff';
-    }
-    
-    getSeverityColor(severity) {
-        const colors = {
-            'critical': '#ff4d6d',
-            'high': '#ff9d00',
-            'medium': '#ffd93d',
-            'low': '#00ff9f'
-        };
-        return colors[severity] || '#00d9ff';
-    }
-    
-    truncateText(text, maxLength) {
-        return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
-    }
-    
-    setFilter(filterType, value) {
-        this.filters[filterType] = value;
-        this.applyFilters();
-    }
-    
-    zoomIn() {
-        this.svg.transition().call(this.zoom.scaleBy, 1.3);
-    }
-    
-    zoomOut() {
-        this.svg.transition().call(this.zoom.scaleBy, 0.7);
-    }
-    
-    resetView() {
-        this.svg.transition().call(
-            this.zoom.transform,
-            d3.zoomIdentity.translate(0, 0).scale(1)
-        );
-    }
-    
-    exportAsImage() {
-        // Create a canvas from the SVG
-        const svgElement = this.svg.node();
-        const svgString = new XMLSerializer().serializeToString(svgElement);
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        const img = new Image();
-        
-        canvas.width = this.width;
-        canvas.height = this.height;
-        
-        img.onload = function() {
-            ctx.fillStyle = '#0a0e1a';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(img, 0, 0);
+        // Remove highlight
+        d3.selectAll('.glow')
+            .transition().duration(200)
+            .attr('stroke-width', 2)
+            .attr('opacity', 0.5);
             
-            // Download
-            const link = document.createElement('a');
-            link.download = `network-map-${Date.now()}.png`;
-            link.href = canvas.toDataURL('image/png');
-            link.click();
+        const tooltip = document.getElementById('network-tooltip');
+        if (tooltip) tooltip.style.display = 'none';
+    }
+
+    // --- STYLING HELPERS ---
+    getSize(type) { return type === 'threat-actor' ? 30 : (type === 'malware' ? 22 : 25); }
+    
+    getColor(sev) { 
+        // Hex codes match your CSS
+        return { 
+            'critical': '#ff4d6d', 
+            'high': '#ff9d00', 
+            'medium': '#ffd93d', 
+            'low': '#00ff9f' 
+        }[sev?.toLowerCase()] || '#00d9ff'; 
+    }
+    
+    getIcon(type) {
+        // FontAwesome Unicode
+        const map = { 
+            'threat-actor': '\uf21b', // User Secret
+            'malware': '\uf188',      // Bug
+            'domain': '\uf0ac',       // Globe
+            'ip': '\uf3c5',           // Map Marker
+            'crypto': '\uf15a'        // Bitcoin/Money
         };
-        
-        img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgString)));
+        return map[type] || '\uf071'; // Warning triangle default
     }
 }
 
-// Initialize network graph
-let networkGraph;
-
-function initializeNetwork() {
-    networkGraph = new NetworkGraph('#networkGraph');
-    networkGraph.loadData(
-        window.threatData.entities,
-        window.threatData.relationships
-    );
+// Global Init
+window.initializeNetwork = function() {
+    if(!document.getElementById('networkGraph')) return;
+    window.networkGraph = new NetworkGraph('#networkGraph');
     
-    // Setup filter controls
-    setupNetworkControls();
-}
-
-function setupNetworkControls() {
-    // Type filters
+    // Setup Filter Listeners
     document.querySelectorAll('.filter-btn[data-type]').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.filter-btn[data-type]').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            networkGraph.setFilter('type', btn.dataset.type);
+            window.networkGraph.setFilter('type', btn.dataset.type);
         });
     });
-    
-    // Severity filters
-    document.querySelectorAll('.filter-btn[data-level]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.filter-btn[data-level]').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            networkGraph.setFilter('severity', btn.dataset.level);
-        });
-    });
-    
-    // Zoom controls
-    document.getElementById('zoomIn')?.addEventListener('click', () => {
-        networkGraph.zoomIn();
-    });
-    
-    document.getElementById('zoomOut')?.addEventListener('click', () => {
-        networkGraph.zoomOut();
-    });
-    
-    document.getElementById('resetView')?.addEventListener('click', () => {
-        networkGraph.resetView();
-    });
-    
-    // Export button
-    document.getElementById('exportNetwork')?.addEventListener('click', () => {
-        networkGraph.exportAsImage();
-    });
-}
+};
 
-// Initialize when DOM is loaded
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeNetwork);
-} else {
-    initializeNetwork();
-}
+// Data Link
+window.updateNetworkMap = function(data) {
+    if(window.networkGraph) window.networkGraph.updateData(data);
+};
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', window.initializeNetwork);
+else window.initializeNetwork();
