@@ -1,3 +1,4 @@
+import os
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import requests
@@ -7,7 +8,14 @@ import datetime
 app = Flask(__name__)
 CORS(app)
 
-# Real-world attribution mapping (CVE -> Likely Actor)
+# --- 1. CONFIGURATION ---
+# Get API Key from Render Environment Variable
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+SITE_URL = "https://cybernexus.onrender.com" # We will get this URL from Render later
+SITE_NAME = "CyberNexus"
+
+# --- 2. THREAT DATA LOGIC ---
+# (Keep your existing KNOWN_THREATS, DEFAULT_ACTORS, etc. here)
 KNOWN_THREATS = {
     "CVE-2023": {"actor": "Lazarus Group", "malware": "Manuscrypt", "ioc": "172.16.88.20"},
     "CVE-2024": {"actor": "Volt Typhoon", "malware": "Living-off-the-Land", "ioc": "kv-botnet.net"},
@@ -26,7 +34,6 @@ def enrich_intelligence(item):
     desc = item.get('shortDescription', '').lower()
     vendor = item.get('vendorProject', '')
     
-    # Smart Attribution based on vendor/keyword
     intel = {
         "actor": random.choice(DEFAULT_ACTORS), 
         "malware": random.choice(DEFAULT_TOOLS),
@@ -38,7 +45,6 @@ def enrich_intelligence(item):
             intel = val
             break
             
-    # Calculate Severity Score
     base_score = 6.5
     if "execution" in desc: base_score += 2.5
     if "privilege" in desc: base_score += 1.5
@@ -54,44 +60,45 @@ def enrich_intelligence(item):
         "mitre": "T" + str(random.randint(1000, 1599))
     }
 
-@app.route('/', defaults={'path': ''})
-@app.route('/<path:path>', methods=['GET'])
-def get_threats(path):
+# --- 3. ROUTES ---
+
+@app.route('/')
+def home():
+    # Render needs a home route to know the app is running
+    return "CyberNexus Backend Online"
+
+@app.route('/api/threats', methods=['GET'])
+def get_threats():
     try:
         url = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
         response = requests.get(url)
         data = response.json()
         
-        count_param = request.args.get('count', 1)
-        count = int(count_param)
-        
+        count = int(request.args.get('count', 1))
         all_vulns = data['vulnerabilities']
         selected_vulns = random.sample(all_vulns, min(len(all_vulns), 20)) 
         
         processed_threats = []
         
         for item in selected_vulns[:count]:
-            # --- SIMULATION: 5% Chance of UNIDENTIFIED THREAT ---
             if random.random() < 0.05:
-                # Inject Anomaly
                 processed_threats.append({
                     "entityId": f"UNK-{random.randint(10000,99999)}",
                     "type": "anomaly", 
                     "entity": "UNIDENTIFIED SIGNAL",
                     "vendor": "UNKNOWN ORIGIN",
-                    "description": f"⚠️ SYSTEM ALERT: {random.choice(UNIDENTIFIED_VECTORS)}. Signature does not match known threat database.",
+                    "description": f"⚠️ SYSTEM ALERT: {random.choice(UNIDENTIFIED_VECTORS)}",
                     "timestamp": datetime.datetime.now().isoformat(),
                     "severity": "critical",
                     "confidence": 100,
-                    "nist_score": 10.0, # MAX DANGER
+                    "nist_score": 10.0,
                     "mitre_id": "UNKNOWN",
-                    "prediction": "IMMEDIATE SYSTEM COMPROMISE IMMINENT. AUTOMATED DEFENSE REQUIRED.",
+                    "prediction": "IMMEDIATE SYSTEM COMPROMISE IMMINENT.",
                     "attacker": "UNKNOWN ACTOR",
                     "tool": "POLYMORPHIC CODE",
                     "ioc_value": "0.0.0.0"
                 })
             else:
-                # Standard Threat
                 intel = enrich_intelligence(item)
                 processed_threats.append({
                     "entityId": item['cveID'],
@@ -104,7 +111,7 @@ def get_threats(path):
                     "confidence": random.randint(85, 99),
                     "nist_score": intel['nist_score'],
                     "mitre_id": intel['mitre'],
-                    "prediction": f"Active Campaign: {intel['actor']} targeting {item['vendorProject']} via {intel['malware']}.",
+                    "prediction": f"Active Campaign: {intel['actor']} targeting {item['vendorProject']}.",
                     "attacker": intel['actor'],
                     "tool": intel['malware'],
                     "ioc_value": intel['ioc_value']
@@ -115,5 +122,36 @@ def get_threats(path):
         print(f"Error: {e}")
         return jsonify([])
 
+# --- NEW: AI PROXY ROUTE (Replaces proxy.js) ---
+@app.route('/api/proxy', methods=['POST'])
+def ai_proxy():
+    if not OPENROUTER_API_KEY:
+        return jsonify({"error": "Server API Key missing"}), 500
+
+    try:
+        incoming_data = request.json
+        
+        # Forward request to OpenRouter
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": SITE_URL,
+                "X-Title": SITE_NAME
+            },
+            json={
+                "model": incoming_data.get("model", "openai/gpt-oss-20b:free"),
+                "messages": incoming_data.get("messages")
+            }
+        )
+        
+        return jsonify(response.json())
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    # Use standard port 5000 for local, Render sets PORT env var
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
