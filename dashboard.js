@@ -48,7 +48,7 @@ function initializeDashboard() {
 
 async function fetchRealThreats(count = 1) {
     try {
-        const response = await fetch(`http://127.0.0.1:5000/api/threats?count=${count}`);
+        const response = await fetch(`/api/threats?count=${count}`);
         if (!response.ok) throw new Error("Backend Offline");
         
         let newThreats = await response.json();
