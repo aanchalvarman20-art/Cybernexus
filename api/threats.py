@@ -54,8 +54,9 @@ def enrich_intelligence(item):
         "mitre": "T" + str(random.randint(1000, 1599))
     }
 
-@app.route('/api/threats', methods=['GET'])
-def get_threats():
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>', methods=['GET'])
+def get_threats(path):
     try:
         url = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
         response = requests.get(url)
