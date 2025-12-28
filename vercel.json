@@ -1,8 +1,7 @@
 {
   "version": 2,
   "builds": [
-    { "src": "app.py", "use": "@vercel/python" },
-    { "src": "api/proxy.js", "use": "@vercel/edge" }
+    { "src": "app.py", "use": "@vercel/python" }
   ],
   "routes": [
     { "src": "/api/threats", "dest": "/app.py" },
